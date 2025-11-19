@@ -2,9 +2,11 @@ local ITEMS_FILE = "resources/[ox]/ox_inventory/data/items.lua"
 local WEAPONS_FILE = "resources/[ox]/ox_inventory/data/weapons.lua"
 local IMAGES_FOLDER = "resources/[ox]/ox_inventory/web/images/"
 
+-- you can change the paths if your files are in a different location but this is usually startndard paths for ox inventory ^^
+
 RegisterCommand("cleanupimages", function(source, args)
     if source ~= 0 then
-        print("This command can only be run from server console.")
+        -- print("This command can only be run from server console.")
         return
     end
 
@@ -19,61 +21,72 @@ RegisterCommand("cleanupimages", function(source, args)
         return data
     end
 
-    -- Collect used images from items.lua and weapons.lua
+    -- check items.lua and the weapons.lua files
     local used = {}
-    for _, path in ipairs({ITEMS_FILE, WEAPONS_FILE}) do
+    local files = {ITEMS_FILE, WEAPONS_FILE}
+
+    for _, path in ipairs(files) do
         local data = readFile(path)
+
         for img in data:gmatch('image%s*=%s*"([^"]+)"') do
-            used[img:lower() .. ".png"] = true
-            used[img:lower() .. ".jpg"] = true
-            used[img:lower() .. ".jpeg"] = true
+            used[img] = true
         end
+
+        for img in data:gmatch('client%s*=%s*{[^}]-image%s*=%s*"([^"]+)"') do
+            used[img] = true
+        end
+
         for name in data:gmatch("%[%'([^']+)%'%]") do
-            used[name:lower() .. ".png"] = true
-            used[name:lower() .. ".jpg"] = true
-            used[name:lower() .. ".jpeg"] = true
+            used[name] = true
         end
+
         for name in data:gmatch('%["([^"]+)"%]') do
-            used[name:lower() .. ".png"] = true
-            used[name:lower() .. ".jpg"] = true
-            used[name:lower() .. ".jpeg"] = true
+            used[name] = true
         end
+
         for name in data:gmatch('name%s*=%s*"([^"]+)"') do
-            used[name:lower() .. ".png"] = true
-            used[name:lower() .. ".jpg"] = true
-            used[name:lower() .. ".jpeg"] = true
+            used[name] = true
         end
     end
 
-    -- Scan images folder
     local p = io.popen('dir "' .. IMAGES_FOLDER .. '" /b')
     local unused = {}
+
     for file in p:lines() do
-        if file:match("%.png$") or file:match("%.jpg$") or file:match("%.jpeg$") then
-            if not used[file:lower()] then
+        local base = file:gsub("%.%w+$", "")
+
+        local ext = file:match("%.([^.]+)$")
+        ext = ext and ext:lower()
+
+        if ext == "png" or ext == "jpg" or ext == "jpeg" then
+            if not used[base] then
                 table.insert(unused, file)
             end
         end
     end
+
     p:close()
 
+    -- no unused images found
     if #unused == 0 then
         print("No unused images found.")
         return
     end
 
+    -- show unused images
     print("\nUnused images found:")
     for _, f in ipairs(unused) do
         print("  " .. f)
     end
 
-    if #args == 0 or args[1]:lower() ~= "yes" then
+    -- the "are you sure" check
+    if not args[1] or args[1]:lower() ~= "yes" then
         print("\nRun the command again with 'yes' to delete these images:")
         print("cleanupimages yes")
         return
     end
 
-    -- Delete unused images
+    -- remove unused images
     local deleted = 0
     for _, file in ipairs(unused) do
         local success, err = os.remove(IMAGES_FOLDER .. file)
